@@ -1,0 +1,167 @@
+<head>
+    <meta charset="utf-8" />
+    <title>My Property Inspector</title>
+    <link rel="stylesheet" href="resources/css/sdpi.css">
+</head>
+
+<body>
+    <div class="sdpi-wrapper" id="content">
+        <div class="sdpi-item">
+            <div class="sdpi-item-label" id="pwLengthLabel">Password length</div>
+            <input class="sdpi-item-value" type="number" id="pwlength" value="12" min="1"/>            
+        </div>
+        
+        <div type="textarea" class="sdpi-item" id="message_only">
+            <div class="sdpi-item-label" id="pwCharsLabel">Password characters</div>
+            <span class="sdpi-item-value textarea">
+                <textarea type="textarea" id="pwchars">0123456789abcdefghijklmnopqrstuvwxyz!@#$%^&*()ABCDEFGHIJKLMNOPQRSTUVWXYZ</textarea>
+            </span>
+        </div>
+    <div>
+
+    <!-- Floating tooltips element -->
+    <div class="sdpi-info-label hidden" style="top: -1000px" data-value=""></div>
+
+        
+    <script>
+        
+        var websocket = null;
+        var uuid = null;
+        var DestinationEnum = Object.freeze({"HARDWARE_AND_SOFTWARE":0, "HARDWARE_ONLY":1, "SOFTWARE_ONLY":2});
+        var settings = {
+            length: 12,
+            chars: "0123456789abcdefghijklmnopqrstuvwxyz!@#$%^&*()ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        };
+        var localization = {};
+
+        document.getElementById("pwlength").addEventListener("input", event => {
+            settings.length = +event.currentTarget.value.trim();
+            saveSettings();
+        });
+
+        document.getElementById("pwchars").addEventListener("input", event => {
+            settings.chars = event.currentTarget.value.trim();
+            saveSettings();
+        });
+        
+        function saveSettings() {
+            if (websocket && uuid) {
+                websocket.send(JSON.stringify({
+                    action: 'org.webzeug.passwordgenerator.action',
+                    event: 'setSettings',
+                    context: uuid,
+                    payload: settings,
+                }));
+            }
+        }
+
+        // Register plugin procedure
+        function connectElgatoStreamDeckSocket(inPort, inPropertyInspectorUUID, inRegisterEvent, inInfo, inActionInfo)
+        {
+            uuid = inPropertyInspectorUUID;            
+            let info = JSON.parse(inInfo);
+            let language = info['application']['language'];
+
+            // Load the localizations
+            getLocalization(language, (inStatus, inLocalization) => {
+                if (inStatus) {
+                    // Save the localizations globally
+                    localization = inLocalization;
+
+                    // Update localized fields
+                    localizeView();
+                }
+                else {
+                    document.getElementById('content').innerHTML = `<p>${inLocalization}</p>`;
+                }
+            });
+
+            // Open the web socket
+            websocket = new WebSocket("ws://127.0.0.1:" + inPort);
+
+            // When the websocket is oben, register with JSON data
+            websocket.onopen = function()
+            {
+                // WebSocket is connected, send message
+                var json = {
+                    "event": inRegisterEvent,
+                    "uuid": inPropertyInspectorUUID
+                };
+                websocket.send(JSON.stringify(json));
+
+                websocket.send(JSON.stringify({
+                    event: 'getSettings',
+                    context: uuid,
+                }));
+            };
+
+            // Receive events
+            websocket.onmessage = function (evt)
+            { 
+                var jsonObj = JSON.parse(evt.data);
+                var event = jsonObj['event'];
+                var action = jsonObj['action'];
+                var context = jsonObj['context'];
+                if (event === 'didReceiveSettings') {
+                    var jsonPayload = jsonObj['payload'];
+                    var currentSettings = jsonPayload['settings'];
+                    if(!currentSettings || !currentSettings.length) {
+                        // save settings initially if no settings exist
+                        saveSettings();
+                    } else {
+                        settings = currentSettings;
+                    }
+                    document.getElementById('pwlength').value = settings.length;
+                    document.getElementById('pwchars').value = settings.chars;
+                    pwgAction.onSettingChanges(context, settings, coordinates);
+                }
+            };
+            
+            // Websocket is closed
+            websocket.onclose = function()
+            { 
+            };
+        };
+
+        function localizeView() {
+            document.getElementById("pwLengthLabel").innerHTML = localization["pwLengthLabel"] || "<pwLengthLabel>";
+            document.getElementById("pwCharsLabel").innerHTML = localization["pwCharsLabel"] || "<pwCharsLabel>";
+        }
+
+        function getLocalization(inLanguage, inCallback) {
+            if(inLanguage !== 'de' && inLanguage !== 'en') 
+            {
+                inLanguage = 'en';
+            }
+            let url = `${inLanguage}.json`;
+            let xhr = new XMLHttpRequest();
+            xhr.open('GET', url, true);
+
+            xhr.onload = () => {
+                if (xhr.readyState === XMLHttpRequest.DONE) {
+                    try {
+                        let data = JSON.parse(xhr.responseText);
+                        let localization = data['Localization'];
+                        inCallback(true, localization);
+                    }
+                    catch(e) {
+                        inCallback(false, 'Localizations is not a valid json.');
+                    }
+                }
+                else {
+                    inCallback(false, 'Could not load the localizations.');
+                }
+            };
+
+            xhr.onerror = () => {
+                inCallback(false, 'An error occurred while loading the localizations.');
+            };
+
+            xhr.ontimeout = () => {
+                inCallback(false, 'Localization timed out.');
+            };
+
+            xhr.send();
+        }
+    </script>
+</body>

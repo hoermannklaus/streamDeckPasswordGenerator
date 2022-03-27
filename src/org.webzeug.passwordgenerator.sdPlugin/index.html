@@ -11,19 +11,22 @@
         var pluginUUID = null;
         var DestinationEnum = Object.freeze({"HARDWARE_AND_SOFTWARE":0, "HARDWARE_ONLY":1, "SOFTWARE_ONLY":2})
         var timer;
-        var counterAction =
-        {
-            type : "com.elgato.counter.action",
-            
+        var pwsettings = {};
+        var pwgAction =
+        {            
             // When a user presses a key
             onKeyDown : function(context, settings, coordinates, userDesiredState)
             {
+                var coordString = `${coordinates.column}_${coordinates.row}`;
                 // Create a randowm password using these chars
-                var chars = "0123456789abcdefghijklmnopqrstuvwxyz!@#$%^&*()ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-                var passwordLength = 12;
+                var chars = pwsettings[coordString] ? pwsettings[coordString].chars : "0123456789abcdefghijklmnopqrstuvwxyz!@#$%^&*()ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+                var passwordLength = pwsettings[coordString] ? pwsettings[coordString].length : 12;
                 var password = "";
+
+                var rnd = new Uint32Array(passwordLength);
+                crypto.getRandomValues(rnd);
                 for (var i = 0; i <= passwordLength; i++) {
-                    var randomNumber = Math.floor(Math.random() * chars.length);
+                    var randomNumber = rnd[i] % chars.length;
                     password += chars.substring(randomNumber, randomNumber +1);
                 }
 
@@ -34,9 +37,22 @@
                 el.style.left = '-9999px';
                 document.body.appendChild(el);
                 el.select();
-                document.execCommand('copy')
+                document.execCommand('copy');
                 document.body.removeChild(el);
 
+            },
+
+            onKeyUp: function(context, settings, coordinates, userDesiredState) {
+
+            },
+
+            onWillAppear: function(context, settings, coordinates) {
+
+            },
+
+            onSettingChanges: function(context, settings, coordinates) {
+                var coordString = `${coordinates.column}_${coordinates.row}`;
+                pwsettings[coordString] = settings;
             }
         };
         
@@ -75,7 +91,7 @@
                     var settings = jsonPayload['settings'];
                     var coordinates = jsonPayload['coordinates'];
                     var userDesiredState = jsonPayload['userDesiredState'];
-                    counterAction.onKeyDown(context, settings, coordinates, userDesiredState);
+                    pwgAction.onKeyDown(context, settings, coordinates, userDesiredState);
                 }
                 // When the user releases a key
                 else if(event == "keyUp")
@@ -84,7 +100,7 @@
                     var settings = jsonPayload['settings'];
                     var coordinates = jsonPayload['coordinates'];
                     var userDesiredState = jsonPayload['userDesiredState'];
-                    counterAction.onKeyUp(context, settings, coordinates, userDesiredState);
+                    pwgAction.onKeyUp(context, settings, coordinates, userDesiredState);
                 }
                 // When an instance of an action is displayed on Stream Deck
                 else if(event == "willAppear")
@@ -92,7 +108,13 @@
                     var jsonPayload = jsonObj['payload'];
                     var settings = jsonPayload['settings'];
                     var coordinates = jsonPayload['coordinates'];
-                    counterAction.onWillAppear(context, settings, coordinates);
+                    pwgAction.onWillAppear(context, settings, coordinates);
+                }
+                else if (event === 'didReceiveSettings') {
+                    var jsonPayload = jsonObj['payload'];
+                    var settings = jsonPayload['settings'];
+                    var coordinates = jsonPayload['coordinates'];
+                    pwgAction.onSettingChanges(context, settings, coordinates);
                 }
             };
 

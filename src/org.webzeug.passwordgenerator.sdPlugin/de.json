@@ -4,5 +4,9 @@
   "com.elgato.counter.action": {
     "Name": "Passwort Generator", 
     "Tooltip": "Erstelle ein neues Passwort"
+  },
+  "Localization": {
+    "pwLengthLabel": "Passwortlänge",
+    "pwCharsLabel": "Verwendete Zeichen"
   }
 }
